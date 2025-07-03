@@ -54,9 +54,9 @@ style.map('TCheckbutton',
 
 def update_status_label():
     if click_intervals:
-        status_label.config(text="✅ Clicks recorded", foreground="green")
+        status_label.config(text="✅ Clicks loaded", foreground="green")
     else:
-        status_label.config(text="❌ No clicks recorded", foreground="red")
+        status_label.config(text="❌ No clicks loaded", foreground="red")
 
 def update_keybind_label():
     global toggle_key, kill_key
@@ -234,7 +234,10 @@ def load_intervals_from_file():
             lines = f.readlines()
             click_intervals = [float(line.strip()) for line in lines if line.strip()]
         update_status_label()
-        messagebox.showinfo("Loaded", f"Loaded {len(click_intervals)} intervals.")
+        filename = os.path.basename(file_path)
+        loaded_file_label.config(text=f"📂 Loaded from: {filename}")
+        messagebox.showinfo("Loaded", f"Loaded {len(click_intervals)} intervals from {filename}.")
+
 
 # Layout columns
 left_frame = tk.Frame(root, bg="#2e2e2e")
@@ -245,11 +248,15 @@ right_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=30, pady=10)
 # Left column
 ttk.Checkbutton(left_frame, text="Loop Playback", variable=loop_enabled).pack(pady=10)
 
-status_label = ttk.Label(left_frame, text="❌ No clicks recorded", foreground="red", background="#2e2e2e")
-status_label.pack(pady=10)
+status_label = ttk.Label(left_frame, text="❌ No clicks loaded", foreground="red", background="#2e2e2e")
+status_label.pack(pady=(10, 0))
+
+loaded_file_label = ttk.Label(left_frame, text="", foreground="lightgray", background="#2e2e2e", font=("Segoe UI", 9))
+loaded_file_label.pack(pady=(0, 10))
 
 click_status_label = ttk.Label(left_frame, text="🔴 Idle – not clicking", foreground="gray", background="#2e2e2e")
 click_status_label.pack(pady=10)
+
 
 keybind_status_label = ttk.Label(left_frame, text="Toggle: None | Kill: None", foreground="lightblue", background="#2e2e2e")
 keybind_status_label.pack(pady=10)
