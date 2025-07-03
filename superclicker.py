@@ -22,7 +22,7 @@ mouse_listener = None
 # GUI Setup
 root = tk.Tk()
 root.title("Super Clicker")
-root.geometry("620x330")
+root.geometry("620x275")
 root.configure(bg="#2e2e2e")
 
 # Optional icon support
@@ -73,6 +73,9 @@ def format_key(key):
 
 def start_click_recording_window():
     global click_times, click_intervals, mouse_listener
+    if click_intervals:
+        messagebox.showwarning("Recording Disabled", "Cannot record new clicks while a file is loaded.\nClick 🧹 Clear Recording to enable.")
+        return
     click_intervals.clear()
     click_times.clear()
 
@@ -238,6 +241,17 @@ def load_intervals_from_file():
         loaded_file_label.config(text=f"📂 Loaded from: {filename}")
         messagebox.showinfo("Loaded", f"Loaded {len(click_intervals)} intervals from {filename}.")
 
+# Clear recordings
+def clear_recording():
+    global click_intervals
+    if not click_intervals:
+        messagebox.showinfo("Nothing to clear", "There are no recorded intervals to clear.")
+        return
+    click_intervals.clear()
+    loaded_file_label.config(text="")
+    update_status_label()
+    messagebox.showinfo("Cleared", "Click intervals have been cleared.")
+
 
 # Layout columns
 left_frame = tk.Frame(root, bg="#2e2e2e")
@@ -265,6 +279,7 @@ keybind_status_label.pack(pady=10)
 ttk.Button(right_frame, text="Record Clicks", command=start_click_recording_window).pack(pady=10)
 ttk.Button(right_frame, text="💾 Save Recording", command=save_intervals_to_file).pack(pady=10)
 ttk.Button(right_frame, text="📂 Load Recording", command=load_intervals_from_file).pack(pady=10)
+ttk.Button(right_frame, text="🧹 Clear Recording", command=clear_recording).pack(pady=10)
 ttk.Button(right_frame, text="Open Keybind Settings", command=open_keybind_window).pack(pady=10)
 
 # Startup
