@@ -1,6 +1,6 @@
 # 🖱️ Super Clicker
 
-**Super Clicker** is a customizable Python-based autoclicker GUI application that records mouse click intervals and replays them with precision. Designed with usability and clarity in mind, it features dark mode styling, configurable keybinds, and a clean two-column layout.
+**Super Clicker** is a customizable Python-based autoclicker application that records mouse click intervals and replays them. Designed with usability and simplicity in mind, it features dark mode styling, configurable keybinds, and a clean two-column layout.
 
 ---
 
@@ -18,7 +18,6 @@
 ### Save / Load
 - Save recorded intervals to a `.txt` file (each line = seconds between clicks)
 - Load previously recorded `.txt` files
-- Helpful file dialogs included
 - Sample intervals in the text file:
 ```
 0.09031391143798828
@@ -31,20 +30,12 @@
 0.07404637336730957
 0.12333536148071289
 0.09613537788391113
+...
 ```
 
-### Keybind Control
-- **Toggle key**: Start or stop the autoclicker
+### Keybinds
+- **Toggle key**: Start or stop clicking
 - **Kill key**: Immediately exit the program
-- Keybinds are set from a dedicated window
-- Prevents duplicate bindings and shows current keys live
-
-### Clean GUI Layout
-- Dark gray background with white text
-- **Two-column layout**:
-  - Left: Loop toggle, click status, activity status, keybind display
-  - Right: Record, Save, Load, Keybinds
-- Hover styling removed for checkboxes for a clean look
 
 ### Custom Icon (optional)
 - Add a file named `icon.ico` in the same directory
