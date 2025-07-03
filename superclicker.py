@@ -1,10 +1,11 @@
 import time
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from pynput import mouse, keyboard
 from pynput.mouse import Button, Controller as MouseController
 from pynput.keyboard import Listener, KeyCode
+import os
 
 click_intervals = []
 click_times = []
@@ -20,7 +21,7 @@ mouse_listener = None
 # GUI Setup
 root = tk.Tk()
 root.title("Autoclicker (Recorded Timing)")
-root.geometry("370x300")
+root.geometry("370x350")
 loop_enabled = tk.BooleanVar()
 
 # Status labels
@@ -164,16 +165,49 @@ def open_keybind_window():
     threading.Thread(target=listen_for_keys, daemon=True).start()
     ttk.Button(settings_window, text="Save & Close", command=save_keys).pack(pady=20)
 
+def save_intervals_to_file():
+    if not click_intervals:
+        messagebox.showwarning("Nothing to save", "There are no recorded intervals.")
+        return
+    file_path = filedialog.asksaveasfilename(defaultextension=".txt",
+                                             filetypes=[("Text files", "*.txt")],
+                                             title="Save Click Intervals")
+    if file_path:
+        try:
+            with open(file_path, "w") as f:
+                for interval in click_intervals:
+                    f.write(f"{interval}\n")
+            messagebox.showinfo("Saved", f"Recording saved to:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+def load_intervals_from_file():
+    global click_intervals
+    file_path = filedialog.askopenfilename(defaultextension=".txt",
+                                           filetypes=[("Text files", "*.txt")],
+                                           title="Open Click Intervals")
+    if file_path and os.path.exists(file_path):
+        try:
+            with open(file_path, "r") as f:
+                lines = f.readlines()
+                click_intervals = [float(line.strip()) for line in lines if line.strip()]
+            update_status_label()
+            messagebox.showinfo("Loaded", f"Loaded {len(click_intervals)} intervals.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
 # GUI Widgets
 ttk.Button(root, text="Record Clicks", command=start_click_recording_window).pack(pady=10)
 ttk.Checkbutton(root, text="Loop Playback", variable=loop_enabled).pack()
 ttk.Button(root, text="Open Keybind Settings", command=open_keybind_window).pack(pady=10)
+ttk.Button(root, text="💾 Save Recording", command=save_intervals_to_file).pack(pady=2)
+ttk.Button(root, text="📂 Load Recording", command=load_intervals_from_file).pack(pady=2)
 status_label.pack(pady=5)
 click_status_label.pack(pady=5)
 ttk.Label(root, text="Use keybinds to toggle or kill").pack(pady=5)
 ttk.Button(root, text="Exit", command=kill_program).pack(pady=10)
 
-# Background Threads
+# Start threads
 threading.Thread(target=click_loop, daemon=True).start()
 start_keyboard_listener()
 update_status_label()
