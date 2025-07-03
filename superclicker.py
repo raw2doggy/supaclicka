@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from pynput import mouse, keyboard
 from pynput.mouse import Button, Controller as MouseController
-from pynput.keyboard import Listener, KeyCode
+from pynput.keyboard import Listener, Key, KeyCode
 import os
 
 click_intervals = []
@@ -21,18 +21,32 @@ mouse_listener = None
 # GUI Setup
 root = tk.Tk()
 root.title("Autoclicker (Recorded Timing)")
-root.geometry("370x350")
+root.geometry("370x420")
 loop_enabled = tk.BooleanVar()
 
 # Status labels
 status_label = ttk.Label(root, text="❌ No clicks recorded", foreground="red")
 click_status_label = ttk.Label(root, text="🔴 Idle – not clicking", foreground="gray")
+keybind_status_label = ttk.Label(root, text="Toggle: None | Kill: None", foreground="blue")
 
 def update_status_label():
     if click_intervals:
         status_label.config(text="✅ Clicks recorded", foreground="green")
     else:
         status_label.config(text="❌ No clicks recorded", foreground="red")
+
+def update_keybind_label():
+    global toggle_key, kill_key
+    toggle_text = format_key(toggle_key) if toggle_key else "None"
+    kill_text = format_key(kill_key) if kill_key else "None"
+    keybind_status_label.config(text=f"Toggle: {toggle_text} | Kill: {kill_text}")
+
+def format_key(key):
+    if isinstance(key, KeyCode):
+        return key.char or str(key)
+    elif isinstance(key, Key):
+        return key.name
+    return str(key)
 
 def start_click_recording_window():
     global click_times, click_intervals, mouse_listener
@@ -111,59 +125,77 @@ def kill_program():
 
 def start_keyboard_listener():
     def on_press(key):
-        if isinstance(key, KeyCode):
-            if key == toggle_key:
-                toggle_clicking()
-            elif key == kill_key:
-                kill_program()
+        if toggle_key and keys_equal(key, toggle_key):
+            toggle_clicking()
+        elif kill_key and keys_equal(key, kill_key):
+            kill_program()
 
     global keyboard_listener
     keyboard_listener = Listener(on_press=on_press)
     keyboard_listener.start()
 
+def keys_equal(k1, k2):
+    return format_key(k1).lower() == format_key(k2).lower()
+
 def open_keybind_window():
     settings_window = tk.Toplevel(root)
     settings_window.title("Keybind Settings")
-    settings_window.geometry("300x200")
+    settings_window.geometry("320x250")
     settings_window.grab_set()
 
-    tk.Label(settings_window, text="Press a key for TOGGLE:").pack(pady=5)
-    toggle_label = tk.Label(settings_window, text="None", relief="sunken")
-    toggle_label.pack()
+    tk.Label(settings_window, text="Click a button to set a keybind:").pack(pady=10)
 
-    tk.Label(settings_window, text="Press a key for KILL:").pack(pady=5)
-    kill_label = tk.Label(settings_window, text="None", relief="sunken")
-    kill_label.pack()
+    toggle_label = tk.Label(settings_window, text="Toggle: None", relief="sunken", width=25)
+    toggle_label.pack(pady=5)
 
-    temp_keys = {'toggle': None, 'kill': None}
+    kill_label = tk.Label(settings_window, text="Kill: None", relief="sunken", width=25)
+    kill_label.pack(pady=5)
 
-    def on_key_press(key):
-        if not temp_keys['toggle']:
-            temp_keys['toggle'] = key
-            toggle_label.config(text=str(key))
-        elif not temp_keys['kill']:
-            temp_keys['kill'] = key
-            kill_label.config(text=str(key))
-        if temp_keys['toggle'] and temp_keys['kill']:
-            return False
+    status_msg = tk.Label(settings_window, text="", foreground="blue")
+    status_msg.pack(pady=5)
 
-    def listen_for_keys():
-        with keyboard.Listener(on_press=on_key_press) as listener:
-            listener.join()
+    def wait_for_keybind(label_to_update, bind_type):
+        status_msg.config(text="Press a key...")
+        listener = None
 
-    def save_keys():
-        nonlocal temp_keys
-        global toggle_key, kill_key
-        if temp_keys['toggle'] and temp_keys['kill']:
-            toggle_key = temp_keys['toggle']
-            kill_key = temp_keys['kill']
-            messagebox.showinfo("Saved", f"Keybinds saved:\nToggle: {toggle_key}\nKill: {kill_key}")
-            settings_window.destroy()
-        else:
-            messagebox.showerror("Error", "You must set both keybinds.")
+        def on_press(key):
+            nonlocal listener
+            global toggle_key, kill_key  # Moved here to be before use
 
-    threading.Thread(target=listen_for_keys, daemon=True).start()
-    ttk.Button(settings_window, text="Save & Close", command=save_keys).pack(pady=20)
+            if bind_type == "Toggle" and keys_equal(key, kill_key):
+                status_msg.config(text="❌ Already used for Kill!", foreground="red")
+                return
+            if bind_type == "Kill" and keys_equal(key, toggle_key):
+                status_msg.config(text="❌ Already used for Toggle!", foreground="red")
+                return
+
+            key_str = format_key(key)
+            label_to_update.config(text=f"{bind_type}: {key_str}")
+            status_msg.config(text=f"{bind_type} set to: {key_str}", foreground="green")
+
+            if bind_type == "Toggle":
+                toggle_key = key
+            elif bind_type == "Kill":
+                kill_key = key
+
+            update_keybind_label()
+            if listener:
+                listener.stop()
+
+
+        listener = keyboard.Listener(on_press=on_press)
+        listener.start()
+
+    ttk.Button(settings_window, text="Set TOGGLE Key", command=lambda: wait_for_keybind(toggle_label, "Toggle")).pack(pady=3)
+    ttk.Button(settings_window, text="Set KILL Key", command=lambda: wait_for_keybind(kill_label, "Kill")).pack(pady=3)
+
+    def close_window():
+        if toggle_key is None or kill_key is None:
+            messagebox.showwarning("Incomplete", "Please set both keybinds.")
+            return
+        settings_window.destroy()
+
+    ttk.Button(settings_window, text="Save & Close", command=close_window).pack(pady=15)
 
 def save_intervals_to_file():
     if not click_intervals:
@@ -202,8 +234,11 @@ ttk.Checkbutton(root, text="Loop Playback", variable=loop_enabled).pack()
 ttk.Button(root, text="Open Keybind Settings", command=open_keybind_window).pack(pady=10)
 ttk.Button(root, text="💾 Save Recording", command=save_intervals_to_file).pack(pady=2)
 ttk.Button(root, text="📂 Load Recording", command=load_intervals_from_file).pack(pady=2)
+
 status_label.pack(pady=5)
 click_status_label.pack(pady=5)
+keybind_status_label.pack(pady=5)
+
 ttk.Label(root, text="Use keybinds to toggle or kill").pack(pady=5)
 ttk.Button(root, text="Exit", command=kill_program).pack(pady=10)
 
@@ -211,6 +246,7 @@ ttk.Button(root, text="Exit", command=kill_program).pack(pady=10)
 threading.Thread(target=click_loop, daemon=True).start()
 start_keyboard_listener()
 update_status_label()
+update_keybind_label()
 
 # Launch GUI
 root.mainloop()
