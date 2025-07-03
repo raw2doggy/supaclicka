@@ -10,6 +10,7 @@
 - Records **natural click intervals** (using left mouse button)
 - Click playback is **timed** using the intervals you recorded
 - Option to **loop playback** continuously
+- Can't record new clicks if there are already clicks loaded
 
 ### Recording
 - Pop-up interface to start/stop click recording
@@ -18,6 +19,7 @@
 ### Save / Load
 - Save recorded intervals to a `.txt` file (each line = seconds between clicks)
 - Load previously recorded `.txt` files
+- Option to clear loaded files
 - Sample intervals in the text file:
 ```
 0.09031391143798828
