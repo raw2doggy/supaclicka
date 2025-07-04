@@ -100,7 +100,14 @@ def start_click_recording_window():
                 print(f"Recorded: {interval:.3f}s")
 
     def start_listener():
-        global mouse_listener
+        global mouse_listener, click_times, click_intervals
+        # If already recording, stop previous listener and reset data
+        if is_recording.get():
+            if mouse_listener:
+                mouse_listener.stop()
+                mouse_listener = None
+            click_times.clear()
+            click_intervals.clear()
         is_recording.set(True)
         mouse_listener = mouse.Listener(on_click=on_click)
         mouse_listener.start()
@@ -112,6 +119,7 @@ def start_click_recording_window():
             mouse_listener.stop()
             mouse_listener = None
         update_status_label()
+        loaded_file_label.config(text="📝 Cached clicks loaded")
         record_window.destroy()
 
     ttk.Button(record_window, text="Start Recording", command=start_listener).pack(pady=5)
