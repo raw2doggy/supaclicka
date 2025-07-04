@@ -18,6 +18,7 @@ clicking_enabled = False
 mouse_controller = MouseController()
 keyboard_listener = None
 mouse_listener = None
+keybind_menu_open = False
 
 # GUI Setup
 root = tk.Tk()
@@ -81,7 +82,7 @@ def start_click_recording_window():
 
     record_window = tk.Toplevel(root)
     record_window.title("Record Clicks")
-    record_window.geometry("300x160")
+    record_window.geometry("300x200")
     record_window.grab_set()
     record_window.configure(bg="#2e2e2e")
 
@@ -89,11 +90,21 @@ def start_click_recording_window():
     info_label.pack(pady=10)
 
     is_recording = tk.BooleanVar(value=False)
+    clicks_recorded = tk.IntVar(value=0)
+
+    recording_status_label = tk.Label(record_window, text="Status: Idle | Clicks: 0", bg="#2e2e2e", fg="lightblue")
+    recording_status_label.pack(pady=5)
+
+    def update_recording_status():
+        status = "Recording..." if is_recording.get() else "Idle"
+        recording_status_label.config(text=f"Status: {status} | Clicks: {clicks_recorded.get()}")
 
     def on_click(x, y, button, pressed):
         if is_recording.get() and button == Button.left and pressed:
             now = time.time()
             click_times.append(now)
+            clicks_recorded.set(clicks_recorded.get() + 1)
+            update_recording_status()
             if len(click_times) > 1:
                 interval = now - click_times[-2]
                 click_intervals.append(interval)
@@ -108,13 +119,16 @@ def start_click_recording_window():
                 mouse_listener = None
             click_times.clear()
             click_intervals.clear()
+            clicks_recorded.set(0)
         is_recording.set(True)
+        update_recording_status()
         mouse_listener = mouse.Listener(on_click=on_click)
         mouse_listener.start()
 
     def stop_recording():
         global mouse_listener
         is_recording.set(False)
+        update_recording_status()
         if mouse_listener:
             mouse_listener.stop()
             mouse_listener = None
@@ -122,9 +136,22 @@ def start_click_recording_window():
         loaded_file_label.config(text="📝 Cached clicks loaded")
         record_window.destroy()
 
+    def on_close():
+        global mouse_listener, click_times, click_intervals
+        is_recording.set(False)
+        if mouse_listener:
+            mouse_listener.stop()
+            mouse_listener = None
+        click_times.clear()
+        click_intervals.clear()
+        update_status_label()
+        record_window.destroy()
+
+    record_window.protocol("WM_DELETE_WINDOW", on_close)
+
     ttk.Button(record_window, text="Start Recording", command=start_listener).pack(pady=5)
     ttk.Button(record_window, text="Stop Recording", command=stop_recording).pack(pady=5)
-
+    
 def click_loop():
     global clicking_enabled
     while True:
@@ -158,6 +185,8 @@ def kill_program():
 
 def start_keyboard_listener():
     def on_press(key):
+        if keybind_menu_open:
+            return  # Ignore keybinds while menu is open
         if toggle_key and keys_equal(key, toggle_key):
             toggle_clicking()
         elif kill_key and keys_equal(key, kill_key):
@@ -170,6 +199,8 @@ def keys_equal(k1, k2):
     return format_key(k1).lower() == format_key(k2).lower()
 
 def open_keybind_window():
+    global keybind_menu_open
+    keybind_menu_open = True
     settings_window = tk.Toplevel(root)
     settings_window.title("Keybind Settings")
     settings_window.geometry("320x250")
@@ -219,9 +250,11 @@ def open_keybind_window():
     ttk.Button(settings_window, text="Set KILL Key", command=lambda: wait_for_keybind(kill_label, "Kill")).pack(pady=3)
 
     def close_window():
+        global keybind_menu_open
         if toggle_key is None or kill_key is None:
             messagebox.showwarning("Incomplete", "Please set both keybinds.")
             return
+        keybind_menu_open = False
         settings_window.destroy()
 
     ttk.Button(settings_window, text="Save & Close", command=close_window).pack(pady=15)
@@ -253,12 +286,11 @@ def load_intervals_from_file():
 def clear_recording():
     global click_intervals
     if not click_intervals:
-        messagebox.showinfo("Nothing to clear", "There are no recorded intervals to clear.")
+        messagebox.showinfo("Nothing to clear", "There are no recorded clicks to clear.")
         return
     click_intervals.clear()
     loaded_file_label.config(text="")
     update_status_label()
-    messagebox.showinfo("Cleared", "Click intervals have been cleared.")
 
 
 # Layout columns
