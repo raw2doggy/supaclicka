@@ -7,6 +7,7 @@ from pynput.mouse import Button, Controller as MouseController
 from pynput.keyboard import Listener, Key, KeyCode
 import os
 import sys
+import random
 
 click_intervals = []
 click_times = []
@@ -82,22 +83,66 @@ def start_click_recording_window():
 
     record_window = tk.Toplevel(root)
     record_window.title("Record Clicks")
-    record_window.geometry("300x200")
+    record_window.geometry("320x420")
     record_window.grab_set()
     record_window.configure(bg="#2e2e2e")
 
-    info_label = tk.Label(record_window, text="Click the left mouse button to record\nPress 'Stop Recording' to finish.", bg="#2e2e2e", fg="white")
+    info_label = tk.Label(record_window, text="Click the left mouse button to record\nClick in the box below to start.", bg="#2e2e2e", fg="white")
     info_label.pack(pady=10)
+
+    # --- Recording mode selection ---
+    mode_var = tk.StringVar(value="Unlimited")
+    time_options = [("Unlimited", 0), ("15 seconds", 15), ("30 seconds", 30), ("45 seconds", 45), ("60 seconds", 60)]
+    time_dropdown = ttk.Combobox(record_window, values=[opt[0] for opt in time_options], state="readonly", width=15)
+    time_dropdown.current(0)
+    time_dropdown.pack(pady=5)
+
+    timer_label = tk.Label(record_window, text="", bg="#2e2e2e", fg="orange", font=("Segoe UI", 12, "bold"))
+    timer_label.pack(pady=5)
 
     is_recording = tk.BooleanVar(value=False)
     clicks_recorded = tk.IntVar(value=0)
-
     recording_status_label = tk.Label(record_window, text="Status: Idle | Clicks: 0", bg="#2e2e2e", fg="lightblue")
     recording_status_label.pack(pady=5)
+
+    marker_canvas = tk.Canvas(record_window, width=260, height=120, bg="#222", highlightthickness=1, highlightbackground="#444")
+    marker_canvas.pack(pady=10)
+
+    # Timer state
+    timer_running = [False]
+    timer_id = [None]
+    start_time = [None]
+    countdown_seconds = [0]
 
     def update_recording_status():
         status = "Recording..." if is_recording.get() else "Idle"
         recording_status_label.config(text=f"Status: {status} | Clicks: {clicks_recorded.get()}")
+
+    def update_timer():
+        if not is_recording.get():
+            return
+        mode = time_dropdown.get()
+        now = time.time()
+        if mode == "Unlimited":
+            elapsed = int(now - start_time[0])
+            timer_label.config(text=f"Elapsed: {elapsed}s")
+            timer_id[0] = record_window.after(1000, update_timer)
+        else:
+            remaining = countdown_seconds[0] - int(now - start_time[0])
+            if remaining >= 0:
+                timer_label.config(text=f"Time left: {remaining}s")
+                timer_id[0] = record_window.after(1000, update_timer)
+            if remaining <= 0:
+                stop_recording(timed_out=True)
+
+    def place_marker(event):
+        r = 5
+        x, y = event.x, event.y
+        marker_canvas.create_oval(x - r, y - r, x + r, y + r, fill="red", outline="white")
+        if not is_recording.get():
+            start_listener()
+
+    marker_canvas.bind("<Button-1>", place_marker)
 
     def on_click(x, y, button, pressed):
         if is_recording.get() and button == Button.left and pressed:
@@ -108,37 +153,61 @@ def start_click_recording_window():
             if len(click_times) > 1:
                 interval = now - click_times[-2]
                 click_intervals.append(interval)
-                print(f"Recorded: {interval:.3f}s")
 
     def start_listener():
         global mouse_listener, click_times, click_intervals
-        # If already recording, stop previous listener and reset data
         if is_recording.get():
-            if mouse_listener:
-                mouse_listener.stop()
-                mouse_listener = None
-            click_times.clear()
-            click_intervals.clear()
-            clicks_recorded.set(0)
+            return
+        if mouse_listener:
+            mouse_listener.stop()
+            mouse_listener = None
+        click_times.clear()
+        click_intervals.clear()
+        clicks_recorded.set(0)
         is_recording.set(True)
         update_recording_status()
         mouse_listener = mouse.Listener(on_click=on_click)
         mouse_listener.start()
+        # Start timer
+        start_time[0] = time.time()
+        mode = time_dropdown.get()
+        if mode == "Unlimited":
+            timer_label.config(text="Elapsed: 0s")
+            timer_running[0] = True
+            update_timer()
+        else:
+            for name, seconds in time_options:
+                if name == mode:
+                    countdown_seconds[0] = seconds
+                    break
+            timer_label.config(text=f"Time left: {countdown_seconds[0]}s")
+            timer_running[0] = True
+            update_timer()
 
-    def stop_recording():
+    def stop_recording(timed_out=False):
         global mouse_listener
         is_recording.set(False)
         update_recording_status()
+        if timer_id[0]:
+            record_window.after_cancel(timer_id[0])
+            timer_id[0] = None
         if mouse_listener:
             mouse_listener.stop()
             mouse_listener = None
         update_status_label()
         loaded_file_label.config(text="📝 Cached clicks loaded")
         record_window.destroy()
+        if timed_out:
+            mode = time_dropdown.get()
+            seconds = [s for n, s in time_options if n == mode][0]
+            messagebox.showinfo("Recording Complete", f"{seconds} second recording is now loaded.")
 
     def on_close():
         global mouse_listener, click_times, click_intervals
         is_recording.set(False)
+        if timer_id[0]:
+            record_window.after_cancel(timer_id[0])
+            timer_id[0] = None
         if mouse_listener:
             mouse_listener.stop()
             mouse_listener = None
@@ -149,9 +218,31 @@ def start_click_recording_window():
 
     record_window.protocol("WM_DELETE_WINDOW", on_close)
 
-    ttk.Button(record_window, text="Start Recording", command=start_listener).pack(pady=5)
-    ttk.Button(record_window, text="Stop Recording", command=stop_recording).pack(pady=5)
-    
+    # --- Mode switching logic ---
+    def on_mode_change(event=None):
+        mode = time_dropdown.get()
+        timer_label.config(text="")
+        if is_recording.get():
+            # If user changes mode while recording, stop and reset
+            if timer_id[0]:
+                record_window.after_cancel(timer_id[0])
+                timer_id[0] = None
+            is_recording.set(False)
+            update_recording_status()
+            if mouse_listener:
+                mouse_listener.stop()
+        if mode == "Unlimited":
+            if not hasattr(record_window, "stop_btn"):
+                record_window.stop_btn = ttk.Button(record_window, text="Stop Recording", command=stop_recording)
+            record_window.stop_btn.pack(pady=5)
+        else:
+            if hasattr(record_window, "stop_btn"):
+                record_window.stop_btn.pack_forget()
+
+    time_dropdown.bind("<<ComboboxSelected>>", on_mode_change)
+    on_mode_change()  # Set initial state
+
+
 def click_loop():
     global clicking_enabled
     while True:
@@ -161,6 +252,17 @@ def click_loop():
             for interval in click_intervals:
                 if not clicking_enabled:
                     break
+                
+                # --- Randomness logic ---
+                level = randomness_level.get()
+                if level > 0:
+                    # Each level is 10% chance, so level 5 = 50%
+                    if random.random() < (level * 0.10):
+                        # Randomly add or subtract 0.025s
+                        delta = 0.025 if random.choice([True, False]) else -0.025
+                        interval = max(0, interval + delta)
+                # --- End randomness logic ---
+
                 time.sleep(interval)
                 mouse_controller.click(Button.left, 1)
 
@@ -203,7 +305,7 @@ def open_keybind_window():
     keybind_menu_open = True
     settings_window = tk.Toplevel(root)
     settings_window.title("Keybind Settings")
-    settings_window.geometry("320x250")
+    settings_window.geometry("320x270")
     settings_window.grab_set()
     settings_window.configure(bg="#2e2e2e")
 
@@ -301,6 +403,17 @@ right_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=30, pady=10)
 
 # Left column
 ttk.Checkbutton(left_frame, text="Loop Playback", variable=loop_enabled).pack(pady=10)
+
+# --- Randomness Level ---
+randomness_level = tk.IntVar(value=0)
+randomness_frame = tk.Frame(left_frame, bg="#2e2e2e")
+randomness_frame.pack(pady=(0, 10))
+ttk.Label(randomness_frame, text="Randomness Level:", background="#2e2e2e").pack(side=tk.LEFT, padx=(0, 5))
+randomness_scale = ttk.Scale(randomness_frame, from_=0, to=5, orient=tk.HORIZONTAL, variable=randomness_level, length=120)
+randomness_scale.pack(side=tk.LEFT)
+randomness_value_label = ttk.Label(randomness_frame, textvariable=randomness_level, background="#2e2e2e")
+randomness_value_label.pack(side=tk.LEFT, padx=(5, 0))
+# --- End Randomness Level ---
 
 status_label = ttk.Label(left_frame, text="❌ No clicks loaded", foreground="red", background="#2e2e2e")
 status_label.pack(pady=(10, 0))
